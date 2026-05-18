@@ -26,15 +26,36 @@ services:
       - "{port}:9119"
     networks:
       - hermes-net
-    # 注入默认 locale=zh 到 dashboard 前端 index.html，让首次访问默认中文界面
+    # 启动前对 dashboard 前端 index.html 做两处幂等注入（标记防重）：
+    #   1. hermes-default-locale: 首次访问 localStorage 没设语言时默认 zh
+    #   2. hermes-default-route:  根路径 / 改写到 /chat，让 React 挂载时直奔对话界面
+    # 用 python3 避免 sed/shell 多层转义陷阱（容器内自带 python3）。
     entrypoint:
       - /bin/sh
       - -c
       - |
-        IDX=/opt/hermes/hermes_cli/web_dist/index.html
-        if [ -f "$$IDX" ] && ! grep -q "hermes-default-locale" "$$IDX"; then
-          sed -i 's|<script type="module"|<script>/*hermes-default-locale*/try{{if(!localStorage.getItem("hermes-locale"))localStorage.setItem("hermes-locale","zh")}}catch(e){{}}</script><script type="module"|' "$$IDX"
-        fi
+        python3 - <<'PYEOF' || true
+        import io, os
+        IDX = "/opt/hermes/hermes_cli/web_dist/index.html"
+        if os.path.exists(IDX):
+            with io.open(IDX, "r", encoding="utf-8") as f:
+                html = f.read()
+            anchor = '<script type="module"'
+            patches = [
+              ("hermes-default-locale",
+               '<script>/*hermes-default-locale*/try{{if(!localStorage.getItem("hermes-locale"))localStorage.setItem("hermes-locale","zh")}}catch(e){{}}</script>'),
+              ("hermes-default-route",
+               '<script>/*hermes-default-route*/try{{var p=location.pathname;if(p===""||p==="/"){{history.replaceState(null,"","/chat"+location.search+location.hash)}}}}catch(e){{}}</script>'),
+            ]
+            changed = False
+            for marker, script in patches:
+                if marker not in html:
+                    html = html.replace(anchor, script + anchor, 1)
+                    changed = True
+            if changed:
+                with io.open(IDX, "w", encoding="utf-8") as f:
+                    f.write(html)
+        PYEOF
         exec /usr/bin/tini -g -- /opt/hermes/docker/entrypoint.sh "$$@"
       - --
     command: ["dashboard", "--host", "0.0.0.0", "--no-open", "--insecure", "--tui"]
