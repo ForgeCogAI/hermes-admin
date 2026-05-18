@@ -12,6 +12,7 @@ DEFAULT_CONFIG = {
     "base_url": "",
     "reasoning_effort": "high",
     "max_turns": 60,
+    "language": "zh",  # UI 语言 (zh/en/ja/de/es/fr/tr/uk)
     "extra_yaml": "",
 }
 
@@ -45,6 +46,7 @@ def write_hermes_config(data_dir: str, config: dict) -> None:
     base_url = config.get("base_url", "").strip()
     reasoning_effort = config.get("reasoning_effort", "").strip()
     max_turns = config.get("max_turns")
+    language = config.get("language", "").strip()
 
     if model:
         hermes_cfg.setdefault("llm", {})["model"] = model
@@ -56,6 +58,8 @@ def write_hermes_config(data_dir: str, config: dict) -> None:
         hermes_cfg.setdefault("llm", {})["reasoning_effort"] = reasoning_effort
     if max_turns is not None:
         hermes_cfg.setdefault("agent", {})["max_turns"] = int(max_turns)
+    if language:
+        hermes_cfg.setdefault("display", {})["language"] = language
 
     yaml_content = yaml.dump(hermes_cfg, default_flow_style=False, allow_unicode=True)
 
