@@ -26,6 +26,17 @@ services:
       - "{port}:9119"
     networks:
       - hermes-net
+    # 注入默认 locale=zh 到 dashboard 前端 index.html，让首次访问默认中文界面
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        IDX=/opt/hermes/hermes_cli/web_dist/index.html
+        if [ -f "$$IDX" ] && ! grep -q "hermes-default-locale" "$$IDX"; then
+          sed -i 's|<script type="module"|<script>/*hermes-default-locale*/try{{if(!localStorage.getItem("hermes-locale"))localStorage.setItem("hermes-locale","zh")}}catch(e){{}}</script><script type="module"|' "$$IDX"
+        fi
+        exec /usr/bin/tini -g -- /opt/hermes/docker/entrypoint.sh "$$@"
+      - --
     command: ["dashboard", "--host", "0.0.0.0", "--no-open", "--insecure", "--tui"]
 
 networks:

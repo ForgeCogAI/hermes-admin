@@ -82,6 +82,28 @@
       </div>
     </div>
 
+    <!-- Language -->
+    <div>
+      <label class="label">界面语言 (language)</label>
+      <div class="flex gap-2 flex-wrap">
+        <button
+          v-for="opt in LANGUAGES"
+          :key="opt.value"
+          type="button"
+          class="py-1.5 px-3 rounded-lg text-xs font-medium border transition"
+          :class="
+            cfg.language === opt.value
+              ? 'bg-brand-500 border-brand-500 text-white'
+              : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500'
+          "
+          @click="cfg.language = opt.value"
+        >
+          {{ opt.label }}
+        </button>
+      </div>
+      <p class="mt-1 text-xs text-gray-500">影响审批提示、网关斜杠命令回复等静态文案；不影响 AI 回复语言</p>
+    </div>
+
     <!-- Max turns -->
     <div>
       <label class="label">最大轮次 (max_turns) — {{ cfg.max_turns }}</label>
@@ -136,6 +158,17 @@ const MODELS = [
 
 const EFFORTS = ['xhigh', 'high', 'medium', 'low', 'minimal']
 
+const LANGUAGES = [
+  { value: 'zh', label: '中文' },
+  { value: 'en', label: 'English' },
+  { value: 'ja', label: '日本語' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'es', label: 'Español' },
+  { value: 'fr', label: 'Français' },
+  { value: 'tr', label: 'Türkçe' },
+  { value: 'uk', label: 'Українська' },
+]
+
 const PROVIDERS = [
   { name: 'Anthropic 官方', base_url: '' },
   { name: 'OpenAI 官方', base_url: '' },
@@ -154,6 +187,7 @@ const cfg = reactive({
   base_url: '',
   reasoning_effort: 'high',
   max_turns: 60,
+  language: 'zh',
   extra_yaml: '',
 })
 
@@ -175,6 +209,7 @@ watch(
     cfg.base_url = v.base_url || ''
     cfg.reasoning_effort = v.reasoning_effort || 'high'
     cfg.max_turns = v.max_turns ?? 60
+    cfg.language = v.language || 'zh'
     cfg.extra_yaml = v.extra_yaml || ''
   },
   { immediate: true, deep: true },
@@ -186,6 +221,7 @@ const currentConfig = computed(() => ({
   base_url: cfg.base_url,
   reasoning_effort: cfg.reasoning_effort,
   max_turns: cfg.max_turns,
+  language: cfg.language,
   extra_yaml: cfg.extra_yaml,
 }))
 
