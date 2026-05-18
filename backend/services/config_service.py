@@ -37,37 +37,80 @@ def get_next_port(used_ports: list[int]) -> int:
     raise ValueError("No available ports in range")
 
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    """递归合并 override 到 base。override 中的 dict 与 base 同 key 时继续递归；
+    其他值（含 list/str/None）直接覆盖。base 会被原地修改并返回。"""
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _deep_merge(base[k], v)
+        else:
+            base[k] = v
+    return base
+
+
 def write_hermes_config(data_dir: str, config: dict) -> None:
-    """Generate cli-config.yaml from our config dict."""
-    hermes_cfg: dict = {}
+    """将 admin 模板/用户覆盖配置写入 hermes 容器内 ~/.hermes/config.yaml
+    对应宿主路径 = data_dir/config.yaml（容器内 HERMES_HOME=/opt/data）。
 
-    model = config.get("model", "").strip()
-    api_key = config.get("api_key", "").strip()
-    base_url = config.get("base_url", "").strip()
-    reasoning_effort = config.get("reasoning_effort", "").strip()
+    Hermes 的 schema 关键字段：
+      model.default / model.provider / model.base_url / model.api_key
+      agent.max_turns / agent.reasoning_effort
+      display.language
+
+    为避免覆盖 hermes 启动时自动生成的注释与默认值，采用 deep-merge 策略：
+    读取现有 config.yaml → 合并我们管理的字段 → 写回。
+    """
+    model = (config.get("model") or "").strip()
+    api_key = (config.get("api_key") or "").strip()
+    base_url = (config.get("base_url") or "").strip()
+    reasoning_effort = (config.get("reasoning_effort") or "").strip()
     max_turns = config.get("max_turns")
-    language = config.get("language", "").strip()
+    language = (config.get("language") or "").strip()
 
+    overrides: dict = {}
+
+    model_section: dict = {}
     if model:
-        hermes_cfg.setdefault("llm", {})["model"] = model
-    if api_key:
-        hermes_cfg.setdefault("llm", {})["api_key"] = api_key
+        model_section["default"] = model
     if base_url:
-        hermes_cfg.setdefault("llm", {})["base_url"] = base_url
-    if reasoning_effort:
-        hermes_cfg.setdefault("llm", {})["reasoning_effort"] = reasoning_effort
+        # 走自定义 OpenAI 兼容端点（OpenRouter、DashScope、Ollama 等）
+        model_section["provider"] = "custom"
+        model_section["base_url"] = base_url
+    if api_key:
+        model_section["api_key"] = api_key
+    if model_section:
+        overrides["model"] = model_section
+
+    agent_section: dict = {}
     if max_turns is not None:
-        hermes_cfg.setdefault("agent", {})["max_turns"] = int(max_turns)
+        agent_section["max_turns"] = int(max_turns)
+    if reasoning_effort:
+        agent_section["reasoning_effort"] = reasoning_effort
+    if agent_section:
+        overrides["agent"] = agent_section
+
     if language:
-        hermes_cfg.setdefault("display", {})["language"] = language
+        overrides["display"] = {"language": language}
 
-    yaml_content = yaml.dump(hermes_cfg, default_flow_style=False, allow_unicode=True)
+    config_path = os.path.join(data_dir, "config.yaml")
+    existing: dict = {}
+    if os.path.exists(config_path):
+        try:
+            with open(config_path) as f:
+                loaded = yaml.safe_load(f)
+                if isinstance(loaded, dict):
+                    existing = loaded
+        except yaml.YAMLError:
+            existing = {}
 
-    extra = config.get("extra_yaml", "").strip()
+    merged = _deep_merge(existing, overrides)
+
+    yaml_content = yaml.dump(merged, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    extra = (config.get("extra_yaml") or "").strip()
     if extra:
         yaml_content += "\n" + extra + "\n"
 
-    config_path = os.path.join(data_dir, "cli-config.yaml")
     with open(config_path, "w") as f:
         f.write(yaml_content)
 
