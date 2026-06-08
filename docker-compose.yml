@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8011:8000"
     volumes:
       - "${ADMIN_DATA_DIR:-~/.hermes-admin}:/data"
       - /var/run/docker.sock:/var/run/docker.sock
@@ -19,6 +19,6 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "3011:80"
     depends_on:
       - backend
